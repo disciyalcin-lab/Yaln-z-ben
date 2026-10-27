@@ -17,6 +17,8 @@ export interface DailyLearnedStat {
   isToday: boolean;
 }
 
+export type ThemeMode = 'SYSTEM' | 'LIGHT' | 'DARK';
+
 export interface UserStats {
   streakDays: number;
   lastStudyDate: string; // YYYY-MM-DD
@@ -24,6 +26,8 @@ export interface UserStats {
   totalQuizCorrect: number;
   totalQuizQuestions: number;
   darkMode: boolean;
+  themeMode?: ThemeMode;
+  autoPlayAudio?: boolean;
 }
 
 const PROGRESS_KEY = 'kuran300_word_progress_v1';
@@ -44,6 +48,10 @@ export function toLocalDateKey(timestampMs: number): string {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+export function getDeck12Number(wordId: number): number {
+  return Math.min(12, Math.max(1, Math.ceil(wordId / 25)));
 }
 
 export function loadWordProgressMap(): Record<number, WordProgress> {
@@ -109,6 +117,15 @@ export function markWordResult(
   return nextMap;
 }
 
+export function resetAllStoredProgress(): Record<number, WordProgress> {
+  try {
+    localStorage.removeItem(PROGRESS_KEY);
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
 export function getLast7DaysLearnedData(
   progressMap: Record<number, WordProgress>
 ): DailyLearnedStat[] {
@@ -157,10 +174,22 @@ export function loadUserStats(): UserStats {
         totalQuizzesTaken: 0,
         totalQuizCorrect: 0,
         totalQuizQuestions: 0,
-        darkMode: true
+        darkMode: false,
+        themeMode: 'LIGHT',
+        autoPlayAudio: false
       };
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return {
+      streakDays: parsed.streakDays ?? 1,
+      lastStudyDate: parsed.lastStudyDate ?? toLocalDateKey(Date.now()),
+      totalQuizzesTaken: parsed.totalQuizzesTaken ?? 0,
+      totalQuizCorrect: parsed.totalQuizCorrect ?? 0,
+      totalQuizQuestions: parsed.totalQuizQuestions ?? 0,
+      darkMode: parsed.darkMode ?? false,
+      themeMode: parsed.themeMode ?? (parsed.darkMode ? 'DARK' : 'LIGHT'),
+      autoPlayAudio: parsed.autoPlayAudio ?? false
+    };
   } catch {
     return {
       streakDays: 1,
@@ -168,7 +197,9 @@ export function loadUserStats(): UserStats {
       totalQuizzesTaken: 0,
       totalQuizCorrect: 0,
       totalQuizQuestions: 0,
-      darkMode: true
+      darkMode: false,
+      themeMode: 'LIGHT',
+      autoPlayAudio: false
     };
   }
 }

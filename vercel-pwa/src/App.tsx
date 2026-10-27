@@ -4,46 +4,82 @@ import {
   markWordResult,
   loadUserStats,
   saveUserStats,
+  resetAllStoredProgress,
   WordProgress,
-  UserStats
+  UserStats,
+  ThemeMode
 } from './utils/storage';
 import { Dashboard } from './components/Dashboard';
 import { Flashcards } from './components/Flashcards';
 import { Quiz } from './components/Quiz';
 import { Dictionary } from './components/Dictionary';
-import { Home, Layers, HelpCircle, BookOpen, Moon, Sun, Download } from 'lucide-react';
+import { Stats } from './components/Stats';
+import { Home, BookMarked, HelpCircle, Sparkles, BarChart3 } from 'lucide-react';
 
-type TabKey = 'DASHBOARD' | 'FLASHCARDS' | 'QUIZ' | 'DICTIONARY';
+type TabKey = 'DASHBOARD' | 'FLASHCARDS' | 'QUIZ' | 'DICTIONARY' | 'STATS';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabKey>('DASHBOARD');
-  const [selectedDeckId, setSelectedDeckId] = useState<number | null>(1);
+  const [selectedDeckId, setSelectedDeckId] = useState<number>(1);
   const [progressMap, setProgressMap] = useState<Record<number, WordProgress>>(() =>
     loadWordProgressMap()
   );
   const [stats, setStats] = useState<UserStats>(() => loadUserStats());
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() =>
+    typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+      : false
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => setSystemPrefersDark(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  const themeMode: ThemeMode = stats.themeMode || (stats.darkMode ? 'DARK' : 'LIGHT');
+  const isDark =
+    themeMode === 'DARK' ? true : themeMode === 'LIGHT' ? false : systemPrefersDark;
 
   useEffect(() => {
     const root = document.documentElement;
-    if (stats.darkMode) {
+    if (isDark) {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
     }
-  }, [stats.darkMode]);
+  }, [isDark]);
 
-  useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
+  const handleToggleTheme = () => {
+    const nextDark = !isDark;
+    const updated: UserStats = {
+      ...stats,
+      darkMode: nextDark,
+      themeMode: nextDark ? 'DARK' : 'LIGHT'
     };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
+    setStats(updated);
+    saveUserStats(updated);
+  };
 
-  const handleToggleDark = () => {
-    const updated: UserStats = { ...stats, darkMode: !stats.darkMode };
+  const handleSetThemeMode = (mode: ThemeMode) => {
+    const nextDark =
+      mode === 'DARK' ? true : mode === 'LIGHT' ? false : systemPrefersDark;
+    const updated: UserStats = {
+      ...stats,
+      darkMode: nextDark,
+      themeMode: mode
+    };
+    setStats(updated);
+    saveUserStats(updated);
+  };
+
+  const handleToggleAutoPlay = () => {
+    const updated: UserStats = {
+      ...stats,
+      autoPlayAudio: !stats.autoPlayAudio
+    };
     setStats(updated);
     saveUserStats(updated);
   };
@@ -65,67 +101,26 @@ export const App: React.FC = () => {
     saveUserStats(updated);
   };
 
-  const handleInstallPwa = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
-    setDeferredPrompt(null);
+  const handleResetAllProgress = () => {
+    const cleared = resetAllStoredProgress();
+    setProgressMap(cleared);
   };
 
   return (
-    <div className="min-h-screen bg-[#FBF9F4] dark:bg-[#071712] text-slate-900 dark:text-slate-100 flex flex-col">
-      {/* Top App Bar */}
-      <header className="sticky top-0 z-30 backdrop-blur-md bg-[#FBF9F4]/90 dark:bg-[#071712]/90 border-b border-emerald-900/10 dark:border-emerald-800/30">
-        <div className="mx-auto flex max-w-xl items-center justify-between px-4 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-800 text-amber-300 font-arabic text-xl font-bold shadow-sm">
-              ق
-            </div>
-            <div>
-              <h1 className="text-base font-extrabold tracking-tight text-emerald-950 dark:text-white">
-                Kur'an 300 Kelime
-              </h1>
-              <p className="text-[11px] text-slate-500 dark:text-emerald-300/70">
-                Frekans Sıralı (%75+ Kur'an Kapsamı)
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {deferredPrompt && (
-              <button
-                onClick={handleInstallPwa}
-                className="inline-flex items-center gap-1 rounded-xl bg-amber-400 px-3 py-1.5 text-xs font-bold text-slate-950 shadow-sm"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Uygulamayı Kur
-              </button>
-            )}
-            <button
-              onClick={handleToggleDark}
-              className="rounded-xl bg-white dark:bg-slate-900 p-2.5 text-slate-700 dark:text-amber-300 border border-slate-200 dark:border-slate-800 shadow-sm"
-              aria-label="Gece / Gündüz Modu"
-            >
-              {stats.darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-          </div>
-        </div>
-      </header>
-
+    <div className="min-h-screen bg-[#F7F7F9] dark:bg-[#111115] text-[#1A1A1E] dark:text-[#F2F2F7] flex flex-col">
       {/* Main Mobile-First Container */}
-      <main className="mx-auto w-full max-w-xl flex-1 px-4 pt-4 pb-24">
+      <main className="mx-auto w-full max-w-xl flex-1 px-4 pt-3 pb-24">
         {activeTab === 'DASHBOARD' && (
           <Dashboard
             progressMap={progressMap}
             stats={stats}
+            isDark={isDark}
+            onToggleTheme={handleToggleTheme}
             onSelectDeck={(deckId) => {
               setSelectedDeckId(deckId);
               setActiveTab('FLASHCARDS');
             }}
-            onStartQuickReview={() => {
-              setSelectedDeckId(1);
-              setActiveTab('FLASHCARDS');
-            }}
+            onNavigateToQuiz={() => setActiveTab('QUIZ')}
           />
         )}
 
@@ -133,6 +128,10 @@ export const App: React.FC = () => {
           <Flashcards
             selectedDeckId={selectedDeckId}
             progressMap={progressMap}
+            isDark={isDark}
+            autoPlayAudio={!!stats.autoPlayAudio}
+            onToggleTheme={handleToggleTheme}
+            onToggleAutoPlay={handleToggleAutoPlay}
             onSelectDeck={setSelectedDeckId}
             onMarkWord={handleMarkWord}
           />
@@ -143,19 +142,34 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === 'DICTIONARY' && (
-          <Dictionary progressMap={progressMap} onToggleLearned={handleMarkWord} />
+          <Dictionary
+            progressMap={progressMap}
+            isDark={isDark}
+            onToggleTheme={handleToggleTheme}
+            onToggleLearned={handleMarkWord}
+          />
+        )}
+
+        {activeTab === 'STATS' && (
+          <Stats
+            progressMap={progressMap}
+            themeMode={themeMode}
+            onSetThemeMode={handleSetThemeMode}
+            onResetAllProgress={handleResetAllProgress}
+          />
         )}
       </main>
 
-      {/* Mobile Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md">
-        <div className="mx-auto grid max-w-xl grid-cols-4 px-2 py-1.5">
+      {/* 5-Tab Bottom Navigation Bar (matching Screen.kt & MainActivity.kt) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#E4E4EC] dark:border-[#32323E] bg-white dark:bg-[#1B1B22]">
+        <div className="mx-auto grid max-w-xl grid-cols-5 px-2 py-2">
           {(
             [
               { key: 'DASHBOARD', label: 'Ana Sayfa', icon: Home },
-              { key: 'FLASHCARDS', label: 'Kartlar', icon: Layers },
+              { key: 'FLASHCARDS', label: 'Kartlar', icon: BookMarked },
               { key: 'QUIZ', label: 'Quiz', icon: HelpCircle },
-              { key: 'DICTIONARY', label: 'Sözlük (300)', icon: BookOpen }
+              { key: 'DICTIONARY', label: 'Sözlük', icon: Sparkles },
+              { key: 'STATS', label: 'Başarı', icon: BarChart3 }
             ] as const
           ).map((item) => {
             const Icon = item.icon;
@@ -164,14 +178,26 @@ export const App: React.FC = () => {
               <button
                 key={item.key}
                 onClick={() => setActiveTab(item.key)}
-                className={`flex flex-col items-center justify-center py-1.5 rounded-2xl transition ${
-                  active
-                    ? 'text-emerald-800 dark:text-amber-400 font-bold'
-                    : 'text-slate-400 dark:text-slate-500'
-                }`}
+                className="flex flex-col items-center justify-center py-1 transition"
               >
-                <Icon className="h-5 w-5" />
-                <span className="mt-1 text-[11px]">{item.label}</span>
+                <div
+                  className={`flex h-8 w-14 items-center justify-center rounded-full transition ${
+                    active
+                      ? 'bg-[#FDECEC] dark:bg-[#4E161A] text-[#B7282E] dark:text-[#E2474D]'
+                      : 'text-[#5A5A64] dark:text-[#B8B8C4]'
+                  }`}
+                >
+                  <Icon className="h-5 w-5" />
+                </div>
+                <span
+                  className={`mt-1 text-[11px] ${
+                    active
+                      ? 'font-bold text-[#B7282E] dark:text-[#E2474D]'
+                      : 'font-normal text-[#5A5A64] dark:text-[#B8B8C4]'
+                  }`}
+                >
+                  {item.label}
+                </span>
               </button>
             );
           })}
